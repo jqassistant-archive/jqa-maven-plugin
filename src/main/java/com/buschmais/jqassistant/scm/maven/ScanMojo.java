@@ -94,8 +94,16 @@ public class ScanMojo extends AbstractModuleMojo {
         store.beginTransaction();
         try {
             scanner.scan(mavenProject, mavenProject.getFile().getAbsolutePath(), MavenScope.PROJECT);
-        } finally {
-            store.commitTransaction();
+        } catch (RuntimeException e) {
+            try {
+                // Even if an exception occurred, try to commit the transaction
+                store.commitTransaction();
+            } catch (RuntimeException e2) {
+                e.addSuppressed(e2);
+            }
+            throw e;
         }
+        // If scanning went well, commit the transaction
+        store.commitTransaction();
     }
 }
