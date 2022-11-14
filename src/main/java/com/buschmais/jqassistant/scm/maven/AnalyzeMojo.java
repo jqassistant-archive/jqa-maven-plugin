@@ -10,6 +10,7 @@ import com.buschmais.jqassistant.core.analysis.api.configuration.Analyze;
 import com.buschmais.jqassistant.core.analysis.impl.AnalyzerImpl;
 import com.buschmais.jqassistant.core.analysis.spi.AnalyzerPluginRepository;
 import com.buschmais.jqassistant.core.configuration.api.ConfigurationBuilder;
+import com.buschmais.jqassistant.core.plugin.api.PluginRepository;
 import com.buschmais.jqassistant.core.report.api.ReportContext;
 import com.buschmais.jqassistant.core.report.api.ReportException;
 import com.buschmais.jqassistant.core.report.api.ReportHelper;
@@ -65,13 +66,19 @@ public class AnalyzeMojo extends AbstractRuleMojo {
      * The severity threshold to warn on rule violations.
      */
     @Parameter(property = "jqassistant.warnOnSeverity")
-    private Severity warnOnSeverity;
+    private Severity.Threshold warnOnSeverity;
 
     /**
-     * The severity threshold to fail on rule violations, i.e. break the build.
+     * The severity threshold to fail on rule violations.
      */
     @Parameter(property = "jqassistant.failOnSeverity")
-    private Severity failOnSeverity;
+    private Severity.Threshold failOnSeverity;
+
+    /**
+     * Determines if jQAssistant shall continue the build if failures have been detected.
+     */
+    @Parameter(property = "jqassistant.continueOnFailure")
+    private boolean continueOnFailure = false;
 
     /**
      * Defines the set of reports which shall be created by default. If empty all
@@ -123,8 +130,9 @@ public class AnalyzeMojo extends AbstractRuleMojo {
             properties.put(XmlReportPlugin.XML_REPORT_FILE, xmlReportFile.getAbsolutePath());
         }
         configurationBuilder.with(Report.class, Report.PROPERTIES, properties);
-        configurationBuilder.with(Report.class, Report.WARN_ON_SEVERITY, warnOnSeverity);
-        configurationBuilder.with(Report.class, Report.FAIL_ON_SEVERITY, failOnSeverity);
+        configurationBuilder.with(Report.class, Report.WARN_ON_SEVERITY, warnOnSeverity != null ? warnOnSeverity.toString() : null);
+        configurationBuilder.with(Report.class, Report.FAIL_ON_SEVERITY, failOnSeverity != null ? failOnSeverity.toString() : null);
+        configurationBuilder.with(Report.class, Report.CONTINUE_ON_FAILURE, continueOnFailure);
         configurationBuilder.with(Report.class, Report.CREATE_ARCHIVE, attachReportArchive);
     }
 
@@ -141,33 +149,38 @@ public class AnalyzeMojo extends AbstractRuleMojo {
 
     private void analyze(MavenConfiguration configuration, MavenProject rootModule, RuleSet ruleSet, RuleSelection ruleSelection, Store store,
         File outputDirectory) throws MojoExecutionException, MojoFailureException {
-        Analyze analyze = configuration.analyze();
         getLog().info("Executing analysis for '" + rootModule.getName() + "'.");
-        getLog().info("Will warn on violations starting from severity '" + analyze.report()
+        Report report = configuration.analyze()
+            .report();
+        getLog().info("Will warn on violations starting from severity '" + report
             .warnOnSeverity() + "'");
-        getLog().info("Will fail on violations starting from severity '" + analyze.report()
+        getLog().info("Will fail on violations starting from severity '" + report
             .failOnSeverity() + "'.");
 
-        ReportContext reportContext = new ReportContextImpl(store, outputDirectory);
-        AnalyzerPluginRepository analyzerPluginRepository = getPluginRepository(configuration).getAnalyzerPluginRepository();
-        Map<String, ReportPlugin> reportPlugins = analyzerPluginRepository.getReportPlugins(analyze.report(), reportContext);
+        PluginRepository pluginRepository = getPluginRepository(configuration);
+        ReportContext reportContext = new ReportContextImpl(pluginRepository.getClassLoader(), store, outputDirectory);
+        AnalyzerPluginRepository analyzerPluginRepository = pluginRepository.getAnalyzerPluginRepository();
+        Map<String, ReportPlugin> reportPlugins = analyzerPluginRepository.getReportPlugins(report, reportContext);
         InMemoryReportPlugin inMemoryReportPlugin = new InMemoryReportPlugin(
             new CompositeReportPlugin(reportPlugins, reportTypes.isEmpty() ? null : reportTypes));
 
         try {
-            Analyzer analyzer = new AnalyzerImpl(analyze, store, analyzerPluginRepository.getRuleInterpreterPlugins(emptyMap()), inMemoryReportPlugin, LOGGER);
+            Analyzer analyzer = new AnalyzerImpl(configuration.analyze(), pluginRepository.getClassLoader(), store,
+                analyzerPluginRepository.getRuleInterpreterPlugins(emptyMap()), inMemoryReportPlugin, LOGGER);
             analyzer.execute(ruleSet, ruleSelection);
         } catch (RuleException e) {
             throw new MojoExecutionException("Analysis failed.", e);
         }
-        if (analyze.report()
+        if (report
             .createArchive()) {
             attachReportArchive(rootModule, reportContext);
         }
-        ReportHelper reportHelper = new ReportHelper(analyze.report(), LOGGER);
+        ReportHelper reportHelper = new ReportHelper(report, LOGGER);
         store.beginTransaction();
         try {
-            verifyAnalysisResults(inMemoryReportPlugin, reportHelper);
+            reportHelper.verify(inMemoryReportPlugin, message -> {
+                throw new MojoFailureException(message);
+            });
         } finally {
             store.commitTransaction();
         }
@@ -189,16 +202,4 @@ public class AnalyzeMojo extends AbstractRuleMojo {
         }
     }
 
-    private void verifyAnalysisResults(InMemoryReportPlugin inMemoryReportWriter, ReportHelper reportHelper) throws MojoFailureException {
-        int conceptViolations = reportHelper.verifyConceptResults(inMemoryReportWriter);
-        int constraintViolations = reportHelper.verifyConstraintResults(inMemoryReportWriter);
-
-        boolean hasConceptViolations = conceptViolations > 0;
-        boolean hasConstraintViolations = constraintViolations > 0;
-        boolean hasViolations = hasConceptViolations || hasConstraintViolations;
-
-        if (hasViolations) {
-            throw new MojoFailureException("Violations detected: " + conceptViolations + " concepts, " + constraintViolations + " constraints");
-        }
-    }
 }

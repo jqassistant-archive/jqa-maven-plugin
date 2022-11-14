@@ -72,7 +72,25 @@ as root module by setting the configuration option <<useExecutionRootAsProjectRo
 
 ==== Plugin Configuration
 
-The jQAssistant Maven plugin must be configured in the pom.xml of the root module, it should not be overwritten by sub-modules.
+The recommended way of configuringthe jQAssistant Maven plugin is using a file `.jqassistant.yml` located in the root directory of the reactor.
+Available options are described in the section <<core:Configuration>>.
+
+Furthermore, the following Maven specific option is supported:
+
+[source,yaml]
+----
+jqassistant:
+
+  maven:
+    # Force the module where 'mvn' is being executed to be used as root module. The database will be created in this module and contain all information of the reactor. Rules will be read from the rules folder of this module.
+    #
+    # jqassistant.maven.use-execution-root-as-project-root: true|false
+    use-execution-root-as-project-root: false
+----
+
+TIP: Maven properties (e.g. `project.basedir`) or user properties defined in pom.xml or settings.xml files can be referenced in YAML files by using the `${...}` syntax, e.g. `${project.basedir}/src/main`.
+
+Alternatively the jQAssistant Maven plugin can be configured in the pom.xml of the root module, it should not be overwritten by sub-modules.
 
 .Setup of the jQAssistant Maven plugin including supported configuration options and their default values (within comments).
 [source,xml]
@@ -141,6 +159,7 @@ The jQAssistant Maven plugin must be configured in the pom.xml of the root modul
                             <!--
                             <warnOnSeverity>MINOR</warnOnSeverity>
                             <failOnSeverity>MAJOR</failOnSeverity>
+                            <continueOnFailure>true</continueOnFailure>
                             <concepts>
                                 <concept>junit4:TestClass</concept>
                             </concepts>
@@ -178,6 +197,12 @@ The jQAssistant Maven plugin must be configured in the pom.xml of the root modul
                         <!-- Misc -->
                             <!--
                             <skip>false</skip>
+                            <configurationLocations>
+                              <configurationLocation>.jqassistant.yml</configurationLocation>
+                              <configurationLocation>.jqassistant.yaml</configurationLocation>
+                              <configurationLocation>.jqassistant/*.yml</configurationLocation>
+                              <configurationLocation>.jqassistant/*.yaml</configurationLocation>
+                            <configurationLocations>
                             <useExecutionRootAsProjectRoot>false</useExecutionRootAsProjectRoot>
                             -->
                          </configuration>
@@ -319,6 +344,7 @@ Starts the integrated Neo4j web server (default address: http://localhost:7474).
 Executes an analysis.
 
 ===== Configuration
+* <<configurationLocations>>
 * <<skip>>
 * <<useExecutionRootAsProjectRoot>>
 * <<store>>
@@ -332,11 +358,15 @@ Executes an analysis.
 * <<rulesUrl>>
 * <<xmlReportFile>>
 * warnOnSeverity (-Djqassistant.warnOnSeverity)
-** determines the severity level for issuing warnings for failed with equal or higher severities
-** default: 'MINOR'
+** determines the severity level for reporting a warning.
+** values: 'info', 'minor', 'major', 'critical', 'blocker' or 'never'
+** default: 'minor'
 * failOnSeverity (-Djqassistant.failOnSeverity)
-** determines the severity level for breaking the build if at least one rule with an equal or higher severity failed
-** default: 'MAJOR'
+** determines the severity level for reporting a failure.
+** values: 'info', 'minor', 'major', 'critical', 'blocker' or 'never'
+** default: 'major'
+* continueOnFailure
+** determines if jQAssistant shall continue the build if failures have been detected
 * executeAppliedConcepts (-Djqassistant.executeAppliedConcepts)
 ** Execute concepts which have already been applied before. The default is 'false' to save time on repeated runs of "analyze" on the
    same data. Setting this flag to 'true' is useful for creating and trying out new concepts.
@@ -391,6 +421,11 @@ Transforms the XML report into HTML (i.e. for generating a Maven site).
 
 === Common Configuration Properties
 ==== Execution
+
+[[configurationLocations]]
+===== configurationLocations (-Djqassistant.configuration.locations)
+* the list of configuration locations, e.g. files and directories
+* default: '.jqassistant.yml, .jqassistant.yaml, .jqassistant/\*.yml, .jqassistant/**.yaml'
 
 [[skip]]
 ===== skip (-Djqassistant.skip)
