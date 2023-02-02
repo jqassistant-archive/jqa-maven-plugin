@@ -14,7 +14,8 @@ public interface Maven {
     @WithDefault("true")
     boolean useExecutionRootAsProjectRoot();
 
-    String STORE_LIFECYCLE = "store-lifecycle";
-    @WithDefault("REACTOR")
-    StoreLifecycle storeLifeCycle();
+    String REUSE_STORE = "reuse-store";
+
+    @WithDefault("true")
+    boolean reuseStore();
 }

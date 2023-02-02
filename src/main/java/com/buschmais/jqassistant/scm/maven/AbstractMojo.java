@@ -10,7 +10,6 @@ import com.buschmais.jqassistant.core.store.api.Store;
 import com.buschmais.jqassistant.neo4j.embedded.configuration.Embedded;
 import com.buschmais.jqassistant.scm.maven.configuration.Maven;
 import com.buschmais.jqassistant.scm.maven.configuration.MavenConfiguration;
-import com.buschmais.jqassistant.scm.maven.configuration.StoreLifecycle;
 import com.buschmais.jqassistant.scm.maven.configuration.source.MavenProjectConfigSource;
 import com.buschmais.jqassistant.scm.maven.configuration.source.SettingsConfigSource;
 import com.buschmais.jqassistant.scm.maven.provider.CachingStoreProvider;
@@ -209,8 +208,8 @@ public abstract class AbstractMojo extends org.apache.maven.plugin.AbstractMojo 
         Object existingStore = cachingStoreProvider.getStore(configuration.store(), storeDirectorySupplier, getPluginRepository(configuration));
         if (!Store.class.isAssignableFrom(existingStore.getClass())) {
             throw new MojoExecutionException(
-                "Cannot re-use store instance from reactor. Either declare the plugin as extension or execute Maven using the property -D"
-                    + Maven.STORE_LIFECYCLE + "=" + StoreLifecycle.MODULE + " on the command line.");
+                "Cannot re-use store instance from reactor. Either declare the plugin as extension or execute Maven using the property -D" + Maven.REUSE_STORE
+                    + "=false on the command line.");
         }
         return (Store) existingStore;
     }
@@ -223,12 +222,8 @@ public abstract class AbstractMojo extends org.apache.maven.plugin.AbstractMojo 
      * @param maven
      */
     private void releaseStore(Store store, Maven maven) {
-        switch (maven.storeLifeCycle()) {
-        case MODULE:
+        if (!maven.reuseStore()) {
             cachingStoreProvider.closeStore(store);
-            break;
-        case REACTOR:
-            break;
         }
     }
 
