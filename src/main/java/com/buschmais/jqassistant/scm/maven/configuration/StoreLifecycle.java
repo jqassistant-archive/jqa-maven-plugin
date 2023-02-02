@@ -1,4 +1,4 @@
-package com.buschmais.jqassistant.scm.maven;
+package com.buschmais.jqassistant.scm.maven.configuration;
 
 /**
  * Defines the valid values for the life cycle of the store.
