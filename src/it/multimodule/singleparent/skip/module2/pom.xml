@@ -7,8 +7,4 @@
 	</parent>
 	<artifactId>@project.artifactId@.integration.multimodule.singleparent.skip.module2</artifactId>
 
-    <properties>
-        <jqa.skip>true</jqa.skip>
-    </properties>
-
 </project>
